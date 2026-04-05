@@ -1,99 +1,45 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the BSD-style license found in the
-# LICENSE file in the root directory of this source tree.
+"""
+sec-quest/client.py
 
-"""Sexcs Environment Client."""
+Python client for the SecQuest environment.
+Extends openenv EnvClient — handles WebSocket connection to the server.
 
-from typing import Dict
+Usage (async):
+    async with SecQuestEnv(base_url="https://your-space.hf.space") as env:
+        result = await env.reset(task_id="easy")
+        print(result.observation.diff)
+        result = await env.step(ReviewAction(
+            action_type="comment",
+            line_number=5,
+            issue_category="security",
+            severity="critical",
+            comment="Hardcoded password in source code.",
+        ))
+        print(result.reward)
 
-from openenv.core import EnvClient
-from openenv.core.client_types import StepResult
-from openenv.core.env_server.types import State
+Usage (sync):
+    with SecQuestEnv(base_url="https://your-space.hf.space").sync() as env:
+        result = env.reset(task_id="easy")
+        result = env.step(ReviewAction(...))
+"""
 
-from .models import SexcsAction, SexcsObservation
+from openenv.core.env_client import EnvClient
+from models import ReviewAction, ReviewObservation
 
 
-class SexcsEnv(
-    EnvClient[SexcsAction, SexcsObservation, State]
-):
-    """
-    Client for the Sexcs Environment.
+class SecQuestEnv(EnvClient):
+    """Client for the SecQuest PR Code Review environment."""
 
-    This client maintains a persistent WebSocket connection to the environment server,
-    enabling efficient multi-step interactions with lower latency.
-    Each client instance has its own dedicated environment session on the server.
+    action_class = ReviewAction
+    observation_class = ReviewObservation
 
-    Example:
-        >>> # Connect to a running server
-        >>> with SexcsEnv(base_url="http://localhost:8000") as client:
-        ...     result = client.reset()
-        ...     print(result.observation.echoed_message)
-        ...
-        ...     result = client.step(SexcsAction(message="Hello!"))
-        ...     print(result.observation.echoed_message)
-
-    Example with Docker:
-        >>> # Automatically start container and connect
-        >>> client = SexcsEnv.from_docker_image("sexcs-env:latest")
-        >>> try:
-        ...     result = client.reset()
-        ...     result = client.step(SexcsAction(message="Test"))
-        ... finally:
-        ...     client.close()
-    """
-
-    def _step_payload(self, action: SexcsAction) -> Dict:
+    async def reset(self, task_id: str = "easy"):
         """
-        Convert SexcsAction to JSON payload for step message.
+        Start a new review episode.
 
-        Args:
-            action: SexcsAction instance
-
-        Returns:
-            Dictionary representation suitable for JSON encoding
+        Parameters
+        ----------
+        task_id : str
+            One of 'easy', 'medium', or 'hard'.
         """
-        return {
-            "message": action.message,
-        }
-
-    def _parse_result(self, payload: Dict) -> StepResult[SexcsObservation]:
-        """
-        Parse server response into StepResult[SexcsObservation].
-
-        Args:
-            payload: JSON response data from server
-
-        Returns:
-            StepResult with SexcsObservation
-        """
-        obs_data = payload.get("observation", {})
-        observation = SexcsObservation(
-            echoed_message=obs_data.get("echoed_message", ""),
-            message_length=obs_data.get("message_length", 0),
-            done=payload.get("done", False),
-            reward=payload.get("reward"),
-            metadata=obs_data.get("metadata", {}),
-        )
-
-        return StepResult(
-            observation=observation,
-            reward=payload.get("reward"),
-            done=payload.get("done", False),
-        )
-
-    def _parse_state(self, payload: Dict) -> State:
-        """
-        Parse server response into State object.
-
-        Args:
-            payload: JSON response from state request
-
-        Returns:
-            State object with episode_id and step_count
-        """
-        return State(
-            episode_id=payload.get("episode_id"),
-            step_count=payload.get("step_count", 0),
-        )
+        return await super().reset(task_id=task_id)
