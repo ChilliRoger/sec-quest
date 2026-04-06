@@ -12,12 +12,18 @@ Required environment variables:
 Usage:
     python inference.py
     python inference.py --url https://your-space.hf.space
+
+STDOUT FORMAT:
+    [START] task=<task_name> env=sec-quest model=<model_name>
+    [STEP]  step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
+    [END]   success=<true|false> steps=<n> score=<score> rewards=<r1,r2,...,rn>
 """
 
 import os
 import re
 import json
 import argparse
+from typing import List, Optional
 from openai import OpenAI
 
 # ── Configuration ────────────────────────────────────────────────────────────
@@ -25,11 +31,39 @@ API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 API_KEY      = os.getenv("HF_TOKEN") or os.getenv("API_KEY", "")
 MODEL_NAME   = os.getenv("MODEL_NAME", "meta-llama/Llama-3.1-8B-Instruct")
 
+BENCHMARK    = "sec-quest"
 MAX_STEPS    = 12
 TEMPERATURE  = 0.2
 MAX_TOKENS   = 600
+SUCCESS_SCORE_THRESHOLD = 0.5  # normalized score in [0, 1]
 
 client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+
+# ── Logging Functions ────────────────────────────────────────────────────────
+
+def log_start(task: str, env: str, model: str) -> None:
+    """Log episode start in required format."""
+    print(f"[START] task={task} env={env} model={model}", flush=True)
+
+
+def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
+    """Log step in required format."""
+    error_val = error if error else "null"
+    done_val = str(done).lower()
+    print(
+        f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}",
+        flush=True,
+    )
+
+
+def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+    """Log episode end in required format."""
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    print(
+        f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}",
+        flush=True,
+    )
+
 
 # ── Prompts ───────────────────────────────────────────────────────────────────
 SYSTEM_PROMPT = """You are an expert senior software engineer performing a code review.
@@ -119,85 +153,81 @@ def call_llm(messages: list) -> dict:
 
 
 def run_task_sync(env_url: str, task_id: str) -> dict:
-    """Run a single task using the HTTP REST endpoints (sync, no WebSocket needed for baseline)."""
+    """Run a single task using the HTTP REST endpoints."""
     import requests
 
     base = env_url.rstrip("/")
     session = requests.Session()
 
-    # Reset
-    resp = session.post(f"{base}/reset", json={"task_id": task_id}, timeout=30)
-    resp.raise_for_status()
-    data = resp.json()
-    obs = data.get("observation", data)
+    rewards: List[float] = []
+    steps_taken = 0
+    score = 0.0
+    success = False
 
-    # Structured logging - START
-    print(json.dumps({
-        "type": "START",
-        "task_id": task_id,
-        "timestamp": str(os.times()),
-    }))
+    log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
 
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    total_reward = 0.0
-    steps = 0
-    done = obs.get("done", False)
-
-    while not done and steps < MAX_STEPS:
-        user_msg = build_user_prompt(obs)
-        messages.append({"role": "user", "content": user_msg})
-
-        action = call_llm(messages)
-        messages.append({"role": "assistant", "content": json.dumps(action)})
-
-        # Step
-        resp = session.post(f"{base}/step", json=action, timeout=30)
+    try:
+        # Reset
+        resp = session.post(f"{base}/reset", json={"task_id": task_id}, timeout=30)
         resp.raise_for_status()
-        step_data = resp.json()
+        data = resp.json()
+        obs = data.get("observation", data)
 
-        reward = step_data.get("reward", 0.0)
-        total_reward += reward
-        obs = step_data.get("observation", step_data)
-        done = step_data.get("done", obs.get("done", False))
-        info = step_data.get("info", {})
-        steps += 1
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        done = obs.get("done", False)
 
-        # Structured logging - STEP
-        print(json.dumps({
-            "type": "STEP",
-            "task_id": task_id,
-            "step": steps,
-            "action": action,
-            "reward": reward,
-            "total_reward": round(total_reward, 4),
-            "done": done,
-            "observation": {
-                "partial_score": obs.get("partial_score", 0.0),
-                "feedback": obs.get("feedback", ""),
-                "steps_remaining": obs.get("steps_remaining", 0),
-            }
-        }))
+        for step in range(1, MAX_STEPS + 1):
+            if done:
+                break
 
-        if done:
-            break
+            user_msg = build_user_prompt(obs)
+            messages.append({"role": "user", "content": user_msg})
 
-    final_score = obs.get("partial_score", 0.0)
-    
-    # Structured logging - END
-    print(json.dumps({
-        "type": "END",
-        "task_id": task_id,
-        "final_score": final_score,
-        "total_reward": round(total_reward, 4),
-        "steps": steps,
-        "timestamp": str(os.times()),
-    }))
+            action_dict = call_llm(messages)
+            messages.append({"role": "assistant", "content": json.dumps(action_dict)})
+
+            # Step
+            resp = session.post(f"{base}/step", json=action_dict, timeout=30)
+            resp.raise_for_status()
+            step_data = resp.json()
+
+            reward = step_data.get("reward", 0.0)
+            rewards.append(reward)
+            obs = step_data.get("observation", step_data)
+            done = step_data.get("done", obs.get("done", False))
+            error = step_data.get("info", {}).get("error", None)
+            steps_taken = step
+
+            # Format action as string for logging
+            action_type = action_dict.get("action_type", "unknown")
+            if action_type == "comment":
+                action_str = f"comment(line={action_dict.get('line_number')},cat={action_dict.get('issue_category')},sev={action_dict.get('severity')})"
+            else:
+                action_str = action_type
+
+            log_step(step=step, action=action_str, reward=reward, done=done, error=error)
+
+            if done:
+                break
+
+        score = obs.get("partial_score", 0.0)
+        success = score >= SUCCESS_SCORE_THRESHOLD
+
+    except Exception as e:
+        error_msg = str(e)
+        log_step(step=steps_taken + 1, action="error", reward=0.0, done=True, error=error_msg)
+        score = 0.0
+        success = False
+
+    finally:
+        log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
     return {
         "task_id": task_id,
-        "final_score": final_score,
-        "total_reward": round(total_reward, 4),
-        "steps": steps,
+        "final_score": score,
+        "total_reward": round(sum(rewards), 4),
+        "steps": steps_taken,
+        "success": success,
     }
 
 
@@ -222,22 +252,25 @@ def main():
             result = run_task_sync(args.url, task_id)
             results.append(result)
         except Exception as e:
-            print(json.dumps({
-                "type": "ERROR",
+            print(f"[ERROR] Task {task_id} failed: {e}", flush=True)
+            results.append({
                 "task_id": task_id,
+                "final_score": 0.0,
                 "error": str(e),
-            }))
-            results.append({"task_id": task_id, "final_score": 0.0, "error": str(e)})
+                "success": False,
+            })
 
-    avg = sum(r.get("final_score", 0) for r in results) / len(results)
+    avg = sum(r.get("final_score", 0) for r in results) / len(results) if results else 0.0
 
-    # Summary structured log
-    print(json.dumps({
-        "type": "SUMMARY",
-        "results": results,
-        "average_score": round(avg, 4),
-        "model": MODEL_NAME,
-    }))
+    print(f"\n{'='*60}")
+    print("  BASELINE RESULTS")
+    print(f"{'='*60}")
+    for r in results:
+        score = r.get("final_score", 0.0)
+        success_icon = "✅" if r.get("success", False) else "❌"
+        print(f"  {success_icon} {r['task_id']:8s}  score={score:.3f}")
+    print(f"\n  AVERAGE SCORE: {avg:.3f}")
+    print(f"{'='*60}\n")
 
     # Write results to file for reproducibility
     with open("baseline_results.json", "w") as f:
@@ -247,9 +280,7 @@ def main():
             "average_score": round(avg, 4),
         }, f, indent=2)
     
-    print(f"\n{'='*60}")
-    print("  Results saved to baseline_results.json")
-    print(f"{'='*60}\n")
+    print("  Results saved to baseline_results.json\n")
 
 
 if __name__ == "__main__":
