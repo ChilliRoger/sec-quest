@@ -1,6 +1,6 @@
 ---
 title: sec-quest
-emoji: 🔍
+emoji: 🔎
 colorFrom: red
 colorTo: orange
 sdk: docker
@@ -20,7 +20,7 @@ openenv:
     PR Code Review RL environment. An AI agent reviews code diffs,
     identifies planted bugs (security vulnerabilities, logic errors,
     race conditions, performance issues), and is scored on coverage
-    and precision. Three tasks: easy → medium → hard.
+    and precision. Three tasks: easy, medium, hard.
   author: sec-quest
   tasks:
     - id: easy
