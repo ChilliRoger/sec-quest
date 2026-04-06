@@ -131,6 +131,13 @@ def run_task_sync(env_url: str, task_id: str) -> dict:
     data = resp.json()
     obs = data.get("observation", data)
 
+    # Structured logging - START
+    print(json.dumps({
+        "type": "START",
+        "task_id": task_id,
+        "timestamp": str(os.times()),
+    }))
+
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     total_reward = 0.0
     steps = 0
@@ -155,13 +162,37 @@ def run_task_sync(env_url: str, task_id: str) -> dict:
         info = step_data.get("info", {})
         steps += 1
 
-        print(f"  [{task_id}] Step {steps}: reward={reward:.4f} | partial={obs.get('partial_score', 0):.3f} | {obs.get('feedback', '')[:80]}")
+        # Structured logging - STEP
+        print(json.dumps({
+            "type": "STEP",
+            "task_id": task_id,
+            "step": steps,
+            "action": action,
+            "reward": reward,
+            "total_reward": round(total_reward, 4),
+            "done": done,
+            "observation": {
+                "partial_score": obs.get("partial_score", 0.0),
+                "feedback": obs.get("feedback", ""),
+                "steps_remaining": obs.get("steps_remaining", 0),
+            }
+        }))
 
         if done:
             break
 
     final_score = obs.get("partial_score", 0.0)
-    print(f"  [{task_id}] ✅ Done in {steps} steps. Final score: {final_score:.4f}")
+    
+    # Structured logging - END
+    print(json.dumps({
+        "type": "END",
+        "task_id": task_id,
+        "final_score": final_score,
+        "total_reward": round(total_reward, 4),
+        "steps": steps,
+        "timestamp": str(os.times()),
+    }))
+
     return {
         "task_id": task_id,
         "final_score": final_score,
@@ -187,25 +218,26 @@ def main():
 
     results = []
     for task_id in ["easy", "medium", "hard"]:
-        print(f"\n▶ Running task: {task_id.upper()}")
         try:
             result = run_task_sync(args.url, task_id)
             results.append(result)
         except Exception as e:
-            print(f"  ❌ Task {task_id} failed: {e}")
+            print(json.dumps({
+                "type": "ERROR",
+                "task_id": task_id,
+                "error": str(e),
+            }))
             results.append({"task_id": task_id, "final_score": 0.0, "error": str(e)})
 
-    print(f"\n{'='*60}")
-    print("  BASELINE SCORES")
-    print(f"{'='*60}")
-    for r in results:
-        score = r.get("final_score", 0.0)
-        bar = "█" * int(score * 20)
-        print(f"  {r['task_id'].upper():8s}  {score:.4f}  [{bar:<20}]")
-
     avg = sum(r.get("final_score", 0) for r in results) / len(results)
-    print(f"\n  AVERAGE   {avg:.4f}")
-    print(f"{'='*60}\n")
+
+    # Summary structured log
+    print(json.dumps({
+        "type": "SUMMARY",
+        "results": results,
+        "average_score": round(avg, 4),
+        "model": MODEL_NAME,
+    }))
 
     # Write results to file for reproducibility
     with open("baseline_results.json", "w") as f:
@@ -214,7 +246,10 @@ def main():
             "results": results,
             "average_score": round(avg, 4),
         }, f, indent=2)
+    
+    print(f"\n{'='*60}")
     print("  Results saved to baseline_results.json")
+    print(f"{'='*60}\n")
 
 
 if __name__ == "__main__":
