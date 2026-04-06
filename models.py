@@ -8,30 +8,6 @@ from pydantic import Field
 from openenv.core.env_server.types import Action, Observation
 
 
-class ReviewComment(object):
-    """A single review comment made by the agent."""
-
-    def __init__(
-        self,
-        line_number: int,
-        issue_category: str,
-        severity: str,
-        comment: str,
-    ):
-        self.line_number = line_number
-        self.issue_category = issue_category
-        self.severity = severity
-        self.comment = comment
-
-    def dict(self):
-        return {
-            "line_number": self.line_number,
-            "issue_category": self.issue_category,
-            "severity": self.severity,
-            "comment": self.comment,
-        }
-
-
 class ReviewAction(Action):
     """
     Action the agent can take in the SecQuest environment.

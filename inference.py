@@ -18,7 +18,6 @@ import os
 import re
 import json
 import argparse
-import asyncio
 from openai import OpenAI
 
 # ── Configuration ────────────────────────────────────────────────────────────
