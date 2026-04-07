@@ -2,7 +2,7 @@
 title: sec-quest
 emoji: 🔍
 colorFrom: red
-colorTo: orange
+colorTo: yellow
 sdk: docker
 pinned: false
 license: apache-2.0
