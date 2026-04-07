@@ -23,3 +23,18 @@ app = create_app(
     ReviewObservation,
     env_name="sec_quest",
 )
+
+
+def main():
+    """Main entry point for running the server."""
+    import uvicorn
+    uvicorn.run(
+        "server.app:app",
+        host="0.0.0.0",
+        port=7860,
+        reload=False
+    )
+
+
+if __name__ == "__main__":
+    main()

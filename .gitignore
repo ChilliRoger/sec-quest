@@ -8,7 +8,6 @@ build/
 outputs/
 baseline_results.json
 .vscode/
-uv.lock
 
 # Test and utility scripts
 fix_encoding.py
