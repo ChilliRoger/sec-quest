@@ -9,3 +9,35 @@ outputs/
 baseline_results.json
 .vscode/
 uv.lock
+
+# Test and utility scripts
+fix_encoding.py
+make_outputs.py
+prepare_deploy.py
+validate-windows.ps1
+cleanup_git.py
+fix_openenv_encoding.py
+
+# Backup and temporary files
+*.backup
+openenv.yaml.backup
+openenv_clean.yaml
+README.hf.yaml
+
+# License duplicate
+LICENSE.md
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

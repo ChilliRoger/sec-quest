@@ -1,97 +1,81 @@
----
-title: sec-quest
-emoji: 🔎
-colorFrom: red
-colorTo: orange
-sdk: docker
-pinned: false
-license: apache-2.0
-tags:
-  - openenv
-  - reinforcement-learning
-  - code-review
-  - security
-  - agentic
-
-openenv:
-  name: sec-quest
-  version: "1.0.0"
-  description: >
-    PR Code Review RL environment. An AI agent reviews code diffs,
-    identifies planted bugs (security vulnerabilities, logic errors,
-    race conditions, performance issues), and is scored on coverage
-    and precision. Three tasks: easy, medium, hard.
-  author: sec-quest
-  tasks:
-    - id: easy
-      name: Rookie Review
-      difficulty: easy
-      description: >
-        30-line Python utility file. Two planted bugs:
-        a hardcoded database password (security/critical)
-        and an off-by-one loop error (logic/major).
-    - id: medium
-      name: Mid-Level Review
-      difficulty: medium
-      description: >
-        80-line Flask REST API. Four planted bugs:
-        missing auth check, SQL injection, N+1 query,
-        and wrong HTTP status code.
-    - id: hard
-      name: Staff Engineer Review
-      difficulty: hard
-      description: >
-        130-line async Python service. Five planted bugs:
-        race condition (no asyncio.Lock), JWT 'none' algorithm bypass,
-        silent exception swallow, TOCTOU vulnerability,
-        and a file resource leak.
-  action_space:
-    type: ReviewAction
-    fields:
-      - name: action_type
-        type: string
-        required: true
-        values: [comment, done, request_changes, approve]
-      - name: line_number
-        type: integer
-        required: false
-      - name: issue_category
-        type: string
-        required: false
-        values: [security, logic, race_condition, performance, style]
-      - name: severity
-        type: string
-        required: false
-        values: [critical, major, minor]
-      - name: comment
-        type: string
-        required: false
-  observation_space:
-    type: ReviewObservation
-    fields:
-      - name: diff
-        type: string
-      - name: task_id
-        type: string
-      - name: task_description
-        type: string
-      - name: comments_so_far
-        type: list[dict]
-      - name: steps_remaining
-        type: integer
-      - name: feedback
-        type: string
-      - name: partial_score
-        type: float
-      - name: done
-        type: boolean
-  reward:
-    min: -1.0
-    max: 1.0
-    type: shaped
+name: sec-quest
+version: "1.0.0"
+description: >
+  PR Code Review RL environment. An AI agent reviews code diffs,
+  identifies planted bugs (security vulnerabilities, logic errors,
+  race conditions, performance issues), and is scored on coverage
+  and precision. Three tasks: easy, medium, hard.
+author: sec-quest
+tasks:
+  - id: easy
+    name: Rookie Review
+    difficulty: easy
     description: >
-      Per-step delta reward based on improvement in partial score.
-      Terminal reward includes completion bonus (+20% if all bugs found)
-      and approve-with-bugs penalty (-50% if critical bugs missed).
-  max_steps: 15
-  endpoint: /
+      30-line Python utility file. Two planted bugs:
+      a hardcoded database password (security/critical)
+      and an off-by-one loop error (logic/major).
+  - id: medium
+    name: Mid-Level Review
+    difficulty: medium
+    description: >
+      80-line Flask REST API. Four planted bugs:
+      missing auth check, SQL injection, N+1 query,
+      and wrong HTTP status code.
+  - id: hard
+    name: Staff Engineer Review
+    difficulty: hard
+    description: >
+      130-line async Python service. Five planted bugs:
+      race condition (no asyncio.Lock), JWT 'none' algorithm bypass,
+      silent exception swallow, TOCTOU vulnerability,
+      and a file resource leak.
+action_space:
+  type: ReviewAction
+  fields:
+    - name: action_type
+      type: string
+      required: true
+      values: [comment, done, request_changes, approve]
+    - name: line_number
+      type: integer
+      required: false
+    - name: issue_category
+      type: string
+      required: false
+      values: [security, logic, race_condition, performance, style]
+    - name: severity
+      type: string
+      required: false
+      values: [critical, major, minor]
+    - name: comment
+      type: string
+      required: false
+observation_space:
+  type: ReviewObservation
+  fields:
+    - name: diff
+      type: string
+    - name: task_id
+      type: string
+    - name: task_description
+      type: string
+    - name: comments_so_far
+      type: list[dict]
+    - name: steps_remaining
+      type: integer
+    - name: feedback
+      type: string
+    - name: partial_score
+      type: float
+    - name: done
+      type: boolean
+reward:
+  min: -1.0
+  max: 1.0
+  type: shaped
+  description: >
+    Per-step delta reward based on improvement in partial score.
+    Terminal reward includes completion bonus (+20% if all bugs found)
+    and approve-with-bugs penalty (-50% if critical bugs missed).
+max_steps: 15
+endpoint: /
