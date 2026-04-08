@@ -20,13 +20,18 @@ Completion bonus:
 Approve-with-bugs penalty:
   -0.50  if agent calls 'approve' and critical bugs remain unfound
 
-Final score is normalized to [0.0, 1.0].
+Final score is normalized to (0.0, 1.0) - strictly between 0 and 1.
 """
 
 from typing import List, Dict, Any
 
 
 LINE_TOLERANCE = 3   # ±3 lines counts as "correct line"
+
+# Score must be strictly between 0 and 1 (not exactly 0.0 or 1.0)
+EPSILON = 0.001
+MIN_SCORE = EPSILON
+MAX_SCORE = 1.0 - EPSILON
 
 CATEGORY_SCORES = {
     "security": 0.10,
@@ -153,9 +158,11 @@ def grade(
     if final_action == "approve" and critical_bugs_missed:
         raw_score -= 0.50 * max_possible
 
-    # Normalize to [0.0, 1.0]
+    # Normalize to (0.0, 1.0) - strictly between 0 and 1
     denominator = max_possible * 1.20   # max_possible + completion bonus ceiling
-    score = max(0.0, min(1.0, raw_score / denominator))
+    normalized = raw_score / denominator
+    # Clamp to (EPSILON, 1.0-EPSILON) to ensure strictly between 0 and 1
+    score = max(MIN_SCORE, min(MAX_SCORE, normalized))
 
     bugs_found = len(found_bug_ids)
     bugs_missed = total_bugs - bugs_found
