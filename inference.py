@@ -36,8 +36,15 @@ MAX_STEPS    = 12
 TEMPERATURE  = 0.2
 MAX_TOKENS   = 600
 SUCCESS_SCORE_THRESHOLD = 0.5  # normalized score in [0, 1]
+STRICT_MIN_SCORE = 0.001
+STRICT_MAX_SCORE = 0.999
 
 client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+
+
+def _strict_score(value: float) -> float:
+    """Clamp any score to the strict open interval (0, 1)."""
+    return max(STRICT_MIN_SCORE, min(STRICT_MAX_SCORE, float(value)))
 
 # ── Logging Functions ────────────────────────────────────────────────────────
 
@@ -161,7 +168,7 @@ def run_task_sync(env_url: str, task_id: str) -> dict:
 
     rewards: List[float] = []
     steps_taken = 0
-    score = 0.0
+    score = STRICT_MIN_SCORE
     success = False
 
     log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
@@ -210,16 +217,17 @@ def run_task_sync(env_url: str, task_id: str) -> dict:
             if done:
                 break
 
-        score = obs.get("partial_score", 0.0)
+        score = _strict_score(obs.get("partial_score", STRICT_MIN_SCORE))
         success = score >= SUCCESS_SCORE_THRESHOLD
 
     except Exception as e:
         error_msg = str(e)
         log_step(step=steps_taken + 1, action="error", reward=0.0, done=True, error=error_msg)
-        score = 0.0
+        score = STRICT_MIN_SCORE
         success = False
 
     finally:
+        score = _strict_score(score)
         log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
     return {
@@ -255,18 +263,18 @@ def main():
             print(f"[ERROR] Task {task_id} failed: {e}", flush=True)
             results.append({
                 "task_id": task_id,
-                "final_score": 0.0,
+                "final_score": STRICT_MIN_SCORE,
                 "error": str(e),
                 "success": False,
             })
 
-    avg = sum(r.get("final_score", 0) for r in results) / len(results) if results else 0.0
+    avg = sum(_strict_score(r.get("final_score", STRICT_MIN_SCORE)) for r in results) / len(results) if results else STRICT_MIN_SCORE
 
     print(f"\n{'='*60}")
     print("  BASELINE RESULTS")
     print(f"{'='*60}")
     for r in results:
-        score = r.get("final_score", 0.0)
+        score = _strict_score(r.get("final_score", STRICT_MIN_SCORE))
         success_icon = "✅" if r.get("success", False) else "❌"
         print(f"  {success_icon} {r['task_id']:8s}  score={score:.3f}")
     print(f"\n  AVERAGE SCORE: {avg:.3f}")

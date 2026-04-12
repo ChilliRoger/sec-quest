@@ -82,7 +82,7 @@ def grade(
     """
     total_bugs = len(bug_manifest)
     if total_bugs == 0:
-        return {"score": 1.0, "feedback": "No bugs to find — perfect!", "bugs_found": 0,
+        return {"score": MAX_SCORE, "feedback": "No bugs to find — perfect!", "bugs_found": 0,
                 "bugs_missed": 0, "false_positives": 0, "coverage": 1.0, "precision": 1.0,
                 "breakdown": []}
 

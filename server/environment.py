@@ -45,7 +45,7 @@ class SecQuestEnvironment(Environment):
         self._task = None
         self._comments = []
         self._done = False
-        self._last_partial_score = 0.0
+        self._last_partial_score = 0.001
         self._steps_used = 0
 
     # ------------------------------------------------------------------
@@ -63,7 +63,7 @@ class SecQuestEnvironment(Environment):
         self._task = ALL_TASKS[task_id]
         self._comments = []
         self._done = False
-        self._last_partial_score = 0.0
+        self._last_partial_score = 0.001
         self._steps_used = 0
         self._state = State(episode_id=str(uuid4()), step_count=0)
 
@@ -74,7 +74,7 @@ class SecQuestEnvironment(Environment):
             comments_so_far=[],
             steps_remaining=MAX_STEPS,
             feedback="Episode started. Review the diff and submit comments.",
-            partial_score=0.0,
+            partial_score=0.001,
             done=False,
         )
 
